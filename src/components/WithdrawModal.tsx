@@ -1,166 +1,214 @@
 'use client'
 
 import React, { useState } from 'react'
-import { X, ArrowDownRight, Wallet, AlertCircle, CheckCircle } from 'lucide-react'
+import { X, ArrowUpRight, Wallet, AlertCircle, CheckCircle2, Phone, CreditCard } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 interface WithdrawModalProps {
   isOpen: boolean
   onClose: () => void
+  userId: string
   currentBalance: number
-  onWithdrawSubmit: (amount: number, address: string) => Promise<boolean>
+  onWithdrawSuccess: (amountPkr: number) => void
 }
 
 export default function WithdrawModal({
   isOpen,
   onClose,
+  userId,
   currentBalance,
-  onWithdrawSubmit,
+  onWithdrawSuccess,
 }: WithdrawModalProps) {
-  const [address, setAddress] = useState('')
-  const [amount, setAmount] = useState('')
+  const [method, setMethod] = useState<'JazzCash' | 'Easypaisa' | 'TRC20'>('JazzCash')
+  const [accountNumber, setAccountNumber] = useState('')
+  const [amountPkr, setAmountPkr] = useState('')
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
 
   if (!isOpen) return null
+
+  const parsedAmount = parseFloat(amountPkr) || 0
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    const numAmount = parseFloat(amount)
-    if (!address || address.length < 10) {
-      setError('Please enter a valid TRC20 wallet address.')
+    if (parsedAmount < 100) {
+      setError('Minimum withdrawal amount is Rs. 100 PKR.')
       return
     }
-    if (isNaN(numAmount) || numAmount <= 0) {
-      setError('Please enter a valid chip withdrawal amount.')
+
+    if (parsedAmount > currentBalance) {
+      setError('Insufficient PKR chip balance.')
       return
     }
-    if (numAmount > currentBalance) {
-      setError('Insufficient chip balance.')
+
+    if (!accountNumber || accountNumber.trim().length < 8) {
+      setError('Please enter a valid JazzCash, Easypaisa, or TRC20 account details.')
       return
     }
 
     setLoading(true)
     try {
-      const ok = await onWithdrawSubmit(numAmount, address)
-      if (ok) {
-        setSuccess(true)
-        setTimeout(() => {
-          setSuccess(false)
-          setAddress('')
-          setAmount('')
-          onClose()
-        }, 2000)
-      } else {
-        setError('Withdrawal request failed. Please try again.')
-      }
+      // 1. Insert transaction record in Supabase
+      const { error: txError } = await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'withdraw',
+        amount_pkr: parsedAmount,
+        payment_method: method,
+        payment_details: accountNumber.trim(),
+        status: 'pending',
+      })
+
+      if (txError) console.warn('Withdraw tx insert note:', txError)
+
+      // 2. Update user balance
+      const newBal = Math.max(0, currentBalance - parsedAmount)
+      await supabase.from('users').update({ chip_balance: newBal }).eq('id', userId)
+
+      setSubmitted(true)
+      onWithdrawSuccess(parsedAmount)
+
+      setTimeout(() => {
+        setSubmitted(false)
+        setAmountPkr('')
+        setAccountNumber('')
+        onClose()
+      }, 2500)
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'An error occurred during withdrawal.'
-      setError(errMsg)
+      const msg = err instanceof Error ? err.message : 'Withdrawal failed'
+      setError(msg)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
       <div
-        className="relative w-full max-w-lg bg-[#12141d] border border-purple-500/30 rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg bg-[#1a1a1a] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-950/20 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header background glow */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-800/80 bg-slate-900/40">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-[#121212]">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg shadow-md">
-              <ArrowDownRight className="w-6 h-6 text-white font-bold" />
+            <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/30">
+              <ArrowUpRight className="w-6 h-6 text-red-400" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white tracking-wide">Withdraw Chips</h3>
-              <p className="text-xs text-purple-400 font-medium">Payouts sent in USDT (TRC20)</p>
+              <h3 className="text-lg font-extrabold text-white tracking-wide">
+                Withdraw PKR
+              </h3>
+              <p className="text-xs text-red-400 font-semibold">JazzCash • Easypaisa • TRC20 USDT</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            aria-label="Close modal"
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
+        {/* Body */}
         <form onSubmit={handleWithdraw} className="p-6 space-y-5">
-          {success ? (
-            <div className="py-8 flex flex-col items-center justify-center space-y-3 text-center">
-              <CheckCircle className="w-16 h-16 text-emerald-400 animate-bounce" />
-              <h4 className="text-xl font-bold text-white">Withdrawal Submitted!</h4>
-              <p className="text-sm text-gray-300">
-                Your payout request of <span className="text-amber-400 font-bold">{amount} Chips</span> has been placed.
+          {submitted ? (
+            <div className="py-8 text-center space-y-3">
+              <CheckCircle2 className="w-16 h-16 text-red-400 mx-auto animate-bounce" />
+              <h4 className="text-xl font-extrabold text-white">Withdrawal Placed!</h4>
+              <p className="text-xs text-gray-300">
+                Your request of <span className="text-red-400 font-bold">Rs. {parsedAmount.toLocaleString()} PKR</span> to {method} ({accountNumber}) is pending approval.
               </p>
             </div>
           ) : (
             <>
               {error && (
-                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/40 text-red-300 text-xs flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              {/* Balance Box */}
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-900/80 border border-gray-800">
-                <div className="flex items-center space-x-2 text-gray-400 text-xs font-semibold uppercase">
-                  <Wallet className="w-4 h-4 text-amber-400" />
-                  <span>Available Balance</span>
+              {/* Current Balance Display */}
+              <div className="p-3.5 rounded-xl bg-[#0a0a0a] border border-gray-800 flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-xs text-gray-400 font-bold uppercase">
+                  <Wallet className="w-4 h-4 text-[#00ff88]" />
+                  <span>Available Balance:</span>
                 </div>
-                <div className="text-lg font-bold text-amber-400">
-                  {currentBalance.toLocaleString()} <span className="text-xs font-normal text-amber-200">Chips</span>
+                <span className="text-base font-extrabold text-[#00ff88]">
+                  Rs. {currentBalance.toLocaleString()} PKR
+                </span>
+              </div>
+
+              {/* Payment Method Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                  Select Payout Method
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['JazzCash', 'Easypaisa', 'TRC20'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMethod(m)}
+                      className={`py-2.5 px-2 text-xs font-bold rounded-xl border transition-all ${
+                        method === m
+                          ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-950/50'
+                          : 'bg-[#0a0a0a] text-gray-400 border-gray-800 hover:border-gray-700'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* TRC20 Address Input */}
+              {/* Account/Wallet Details Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                  Your TRC20 USDT Wallet Address
+                <label className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                  {method === 'TRC20' ? 'TRC20 USDT Wallet Address' : `${method} Mobile Number`}
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. T..."
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="w-full py-3 px-4 text-sm font-mono bg-slate-950 border border-gray-700/80 rounded-xl text-white focus:outline-none focus:border-purple-500 placeholder-gray-600"
-                />
+                <div className="relative flex items-center">
+                  {method === 'TRC20' ? (
+                    <CreditCard className="absolute left-3.5 w-4 h-4 text-gray-500" />
+                  ) : (
+                    <Phone className="absolute left-3.5 w-4 h-4 text-gray-500" />
+                  )}
+                  <input
+                    type="text"
+                    required
+                    placeholder={method === 'TRC20' ? 'TQk7X...' : '03001234567'}
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    className="w-full py-3 pl-10 pr-4 bg-[#0a0a0a] border border-gray-800 rounded-xl text-sm text-white focus:outline-none focus:border-red-500"
+                  />
+                </div>
               </div>
 
               {/* Amount Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
-                    Amount to Withdraw (Chips)
+                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                    Amount (Rs. PKR)
                   </label>
                   <button
                     type="button"
-                    onClick={() => setAmount(currentBalance.toString())}
-                    className="text-[11px] font-bold text-purple-400 hover:text-purple-300 underline"
+                    onClick={() => setAmountPkr(currentBalance.toString())}
+                    className="text-[11px] font-bold text-red-400 hover:underline"
                   >
-                    Withdraw All
+                    Withdraw Max
                   </button>
                 </div>
                 <input
                   type="number"
                   required
-                  min="10"
+                  min="100"
                   max={currentBalance}
-                  placeholder="Minimum 10 Chips"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full py-3 px-4 text-sm font-mono bg-slate-950 border border-gray-700/80 rounded-xl text-amber-300 focus:outline-none focus:border-purple-500 placeholder-gray-600"
+                  placeholder="Min Rs. 100 PKR"
+                  value={amountPkr}
+                  onChange={(e) => setAmountPkr(e.target.value)}
+                  className="w-full py-3 px-4 bg-[#0a0a0a] border border-gray-800 rounded-xl text-sm font-bold text-[#00ff88] focus:outline-none focus:border-red-500"
                 />
               </div>
 
@@ -168,12 +216,12 @@ export default function WithdrawModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-purple-950/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                className="w-full py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-red-950/50 flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95"
               >
                 {loading ? (
-                  <span>Processing Request...</span>
+                  <span>Processing Withdrawal...</span>
                 ) : (
-                  <span>Confirm Withdrawal</span>
+                  <span>Confirm PKR Withdrawal</span>
                 )}
               </button>
             </>

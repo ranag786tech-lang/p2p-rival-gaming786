@@ -9,8 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "#0a0a0a",
+        card: "#1a1a1a",
+        accent: {
+          DEFAULT: "#00ff88",
+          hover: "#00e67a",
+        },
       },
     },
   },
