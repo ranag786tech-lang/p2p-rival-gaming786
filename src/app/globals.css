@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #f3f4f6;
+  --card: #1a1a1a;
+  --accent: #00ff88;
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  min-height: 100vh;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Neon Green Glow Effects */
+.glow-neon-green {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.35);
+}
+
+.border-neon-green {
+  border-color: rgba(0, 255, 136, 0.5);
+}
+
+.neon-text {
+  color: #00ff88;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #333;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00ff88;
+}
