@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Flame, PlusCircle, ArrowUpRight, Coins, User as UserIcon } from 'lucide-react'
+import Link from 'next/link'
 import Sidebar from '@/components/Sidebar'
 import GameArea from '@/components/GameArea'
 import DepositModal from '@/components/DepositModal'
 import WithdrawModal from '@/components/WithdrawModal'
-import AuthModal from '@/components/AuthModal'
-import { supabase, UserProfile } from '@/lib/supabaseClient'
+import RealAuthModal from '@/components/RealAuthModal'
+import { supabase, Profile } from '@/lib/supabaseClient'
 
 export default function Home() {
   const [activeGameSlug, setActiveGameSlug] = useState('doomsday-rampage')
@@ -15,54 +16,34 @@ export default function Home() {
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false)
   const [isAuthOpen, setIsAuthOpen] = useState(false)
 
-  const [user, setUser] = useState<UserProfile | null>(null)
-  const [chipBalance, setChipBalance] = useState<number>(5000)
-  const [sessionStartBalance, setSessionStartBalance] = useState<number>(5000)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [chipBalance, setChipBalance] = useState<number>(0)
+  const [sessionStartBalance, setSessionStartBalance] = useState<number>(0)
   const [loadingUser, setLoadingUser] = useState(true)
 
-  // Initialize active user profile
+  // Initialize or Listen to Realtime Balance Updates
   const initUser = useCallback(async () => {
     try {
-      const demoEmail = 'player1@p2phub.com'
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', demoEmail)
-        .single()
+      const { data: { session } } = await supabase.auth.getSession()
 
-      if (error && error.code === 'PGRST116') {
-        // Create user
-        const { data: newUser } = await supabase
-          .from('users')
-          .insert({
-            email: demoEmail,
-            chip_balance: 5000,
-          })
-          .select()
+      if (session?.user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
           .single()
 
-        if (newUser) {
-          setUser(newUser)
-          setChipBalance(newUser.chip_balance)
-          setSessionStartBalance(newUser.chip_balance)
+        if (prof) {
+          setProfile(prof)
+          setChipBalance(prof.chip_balance)
+          setSessionStartBalance(prof.chip_balance)
         }
-      } else if (data) {
-        setUser(data)
-        setChipBalance(data.chip_balance)
-        setSessionStartBalance(data.chip_balance)
       } else {
-        const fallbackUser: UserProfile = {
-          id: 'demo-user-123',
-          email: demoEmail,
-          tron_address: null,
-          chip_balance: 5000,
-        }
-        setUser(fallbackUser)
-        setChipBalance(5000)
-        setSessionStartBalance(5000)
+        // Auto show Auth Modal for first visit / unregistered
+        setIsAuthOpen(true)
       }
     } catch (e) {
-      console.warn('Supabase fetch notice:', e)
+      console.warn('Init user note:', e)
     } finally {
       setLoadingUser(false)
     }
@@ -72,16 +53,38 @@ export default function Home() {
     initUser()
   }, [initUser])
 
-  // Simulation Handlers
+  // Supabase Realtime Subscription for chip_balance updates
+  useEffect(() => {
+    if (!profile?.id) return
+
+    const channel = supabase
+      .channel(`profile-${profile.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${profile.id}` },
+        (payload) => {
+          if (payload.new && typeof payload.new.chip_balance === 'number') {
+            setChipBalance(payload.new.chip_balance)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile?.id])
+
+  // Real Simulation Handlers
   const handleSimulateWin = async () => {
     const winAmount = 100
     const newBal = chipBalance + winAmount
     setChipBalance(newBal)
 
-    if (user) {
-      await supabase.from('users').update({ chip_balance: newBal }).eq('id', user.id)
+    if (profile) {
+      await supabase.from('profiles').update({ chip_balance: newBal }).eq('id', profile.id)
       await supabase.from('transactions').insert({
-        user_id: user.id,
+        user_id: profile.id,
         type: 'win',
         amount_pkr: winAmount,
         status: 'approved',
@@ -94,10 +97,10 @@ export default function Home() {
     const newBal = Math.max(0, chipBalance - lossAmount)
     setChipBalance(newBal)
 
-    if (user) {
-      await supabase.from('users').update({ chip_balance: newBal }).eq('id', user.id)
+    if (profile) {
+      await supabase.from('profiles').update({ chip_balance: newBal }).eq('id', profile.id)
       await supabase.from('transactions').insert({
-        user_id: user.id,
+        user_id: profile.id,
         type: 'loss',
         amount_pkr: lossAmount,
         status: 'approved',
@@ -106,11 +109,10 @@ export default function Home() {
   }
 
   const handleDepositSuccess = (amountPkr: number) => {
-    // Add pending PKR amount to session/balance
     const updated = chipBalance + amountPkr
     setChipBalance(updated)
-    if (user) {
-      supabase.from('users').update({ chip_balance: updated }).eq('id', user.id)
+    if (profile) {
+      supabase.from('profiles').update({ chip_balance: updated }).eq('id', profile.id)
     }
   }
 
@@ -119,10 +121,10 @@ export default function Home() {
     setChipBalance(updated)
   }
 
-  const handleAuthSuccess = (loggedUser: UserProfile) => {
-    setUser(loggedUser)
-    setChipBalance(loggedUser.chip_balance)
-    setSessionStartBalance(loggedUser.chip_balance)
+  const handleAuthSuccess = (loggedProfile: Profile) => {
+    setProfile(loggedProfile)
+    setChipBalance(loggedProfile.chip_balance)
+    setSessionStartBalance(loggedProfile.chip_balance)
   }
 
   return (
@@ -133,7 +135,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
 
           {/* Logo / Brand */}
-          <div className="flex items-center space-x-3 cursor-pointer">
+          <Link href="/" className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-[#00ff88] p-0.5 shadow-lg shadow-[#00ff88]/20 flex items-center justify-center">
               <Flame className="w-6 h-6 text-black fill-black" />
             </div>
@@ -145,12 +147,12 @@ export default function Home() {
                 PKR Gaming
               </span>
             </div>
-          </div>
+          </Link>
 
-          {/* Right Header Actions */}
+          {/* Balance & Actions */}
           <div className="flex items-center space-x-3 sm:space-x-4">
 
-            {/* PKR Balance Display */}
+            {/* Realtime PKR Balance */}
             <div className="flex items-center space-x-2 bg-[#0a0a0a] border border-[#00ff88]/40 px-3.5 py-1.5 rounded-xl shadow-inner">
               <Coins className="w-4 h-4 text-[#00ff88]" />
               <div className="text-xs sm:text-sm font-extrabold text-[#00ff88]">
@@ -162,7 +164,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Deposit Button (Green) */}
+            {/* Deposit */}
             <button
               onClick={() => setIsDepositOpen(true)}
               className="px-4 py-2 bg-[#00ff88] hover:bg-[#00e67a] text-black font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-[#00ff88]/20 active:scale-95 flex items-center space-x-1.5"
@@ -171,7 +173,7 @@ export default function Home() {
               <span>Deposit</span>
             </button>
 
-            {/* Withdraw Button (Red) */}
+            {/* Withdraw */}
             <button
               onClick={() => setIsWithdrawOpen(true)}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-red-950/30 active:scale-95 flex items-center space-x-1.5"
@@ -180,29 +182,29 @@ export default function Home() {
               <span>Withdraw</span>
             </button>
 
-            {/* Login / Profile Trigger */}
-            <button
-              onClick={() => setIsAuthOpen(true)}
+            {/* Profile Link */}
+            <Link
+              href="/profile"
               className="p-2 bg-[#0a0a0a] hover:bg-gray-900 border border-gray-800 rounded-xl text-gray-300 hover:text-[#00ff88] transition-colors"
-              title={user ? user.email : 'Login'}
+              title="Manage Profile & Wallets"
             >
               <UserIcon className="w-5 h-5" />
-            </button>
+            </Link>
 
           </div>
         </div>
       </header>
 
-      {/* Main Layout: Sidebar (20%) + Center (80%) */}
+      {/* Main Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row">
 
-        {/* Left Sidebar (20% approx) */}
+        {/* Left Sidebar */}
         <Sidebar
           activeGameSlug={activeGameSlug}
           onSelectGame={(slug) => setActiveGameSlug(slug)}
         />
 
-        {/* Center Main Game Area (80% approx) */}
+        {/* Center Game Area */}
         <main className="flex-1 p-4 lg:p-6 space-y-6">
           <GameArea
             chipBalance={chipBalance}
@@ -220,10 +222,12 @@ export default function Home() {
           <div className="flex items-center space-x-2">
             <Flame className="w-4 h-4 text-[#00ff88]" />
             <span className="font-extrabold text-[#00ff88]">P2P HUB</span>
-            <span>&copy; {new Date().getFullYear()} All PKR transactions guaranteed.</span>
+            <span>&copy; {new Date().getFullYear()} Real-time PKR Gaming Hub.</span>
           </div>
           <div className="flex items-center space-x-4 text-gray-400">
-            <span>Rate: 1 USDT = 280 PKR</span>
+            <Link href="/profile" className="hover:text-[#00ff88]">
+              Bind Wallet
+            </Link>
             <span>•</span>
             <button onClick={() => setIsDepositOpen(true)} className="hover:text-[#00ff88]">
               Deposit
@@ -240,19 +244,19 @@ export default function Home() {
       <DepositModal
         isOpen={isDepositOpen}
         onClose={() => setIsDepositOpen(false)}
-        userId={user?.id || 'demo-user-123'}
+        userId={profile?.id || 'demo-user-123'}
         onDepositSuccess={handleDepositSuccess}
       />
 
       <WithdrawModal
         isOpen={isWithdrawOpen}
         onClose={() => setIsWithdrawOpen(false)}
-        userId={user?.id || 'demo-user-123'}
+        userId={profile?.id || 'demo-user-123'}
         currentBalance={chipBalance}
         onWithdrawSuccess={handleWithdrawSuccess}
       />
 
-      <AuthModal
+      <RealAuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onAuthSuccess={handleAuthSuccess}

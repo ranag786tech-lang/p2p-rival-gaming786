@@ -178,26 +178,37 @@ export default function DepositModal({
                 </div>
               </div>
 
-              {/* Instructions */}
-              <div className="p-3 bg-[#121212] rounded-xl border border-gray-800 text-xs text-gray-300 space-y-1">
-                <div className="font-bold text-white flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#00ff88]" />
-                  <span>Instructions:</span>
+              {/* Instructions & WhatsApp Banner */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs space-y-1">
+                <div className="font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Contact on WhatsApp after sending</span>
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Send USDT (TRC20) to the address above and click <span className="text-[#00ff88] font-bold">&quot;I Sent&quot;</span>. Your account will be updated with PKR chips.
+                <p className="text-[11px] text-gray-300">
+                  After sending your USDT deposit, contact us on WhatsApp with your transfer receipt or transaction hash for instant chip verification.
                 </p>
               </div>
 
-              {/* 'I Sent' Primary Button */}
-              <button
-                onClick={handleISent}
-                disabled={loading}
-                className="w-full py-3.5 bg-[#00ff88] hover:bg-[#00e67a] text-black font-extrabold text-sm rounded-xl transition-all shadow-lg shadow-[#00ff88]/20 flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-95"
-              >
-                <Send className="w-4 h-4" />
-                <span>I Sent (Confirm Deposit)</span>
-              </button>
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a
+                  href={`https://wa.me/1234567890?text=${encodeURIComponent('Hello! I sent a TRC20 USDT deposit for my P2P HUB account.')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-md"
+                >
+                  <span>Contact on WhatsApp</span>
+                </a>
+
+                <button
+                  onClick={handleISent}
+                  disabled={loading}
+                  className="py-3 px-4 bg-[#00ff88] hover:bg-[#00e67a] text-black font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>I Sent (Confirm Deposit)</span>
+                </button>
+              </div>
             </>
           )}
         </div>

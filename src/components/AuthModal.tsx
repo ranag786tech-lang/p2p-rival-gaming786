@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react'
 import { X, Lock, Mail, LogIn, UserPlus, AlertCircle } from 'lucide-react'
-import { supabase, UserProfile } from '@/lib/supabaseClient'
+import { supabase, Profile } from '@/lib/supabaseClient'
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onAuthSuccess: (user: UserProfile) => void
+  onAuthSuccess: (user: Profile) => void
 }
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalProps) {
@@ -47,11 +47,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
           console.warn('Profile creation note:', profileError)
         }
 
-        const activeUser: UserProfile = userProfile || {
+        const activeUser: Profile = userProfile || {
           id: authData.user?.id || 'demo-id',
           email,
-          tron_address: null,
-          chip_balance: 5000,
+          phone: null,
+          username: email.split('@')[0],
+          chip_balance: 50,
+          bonus_claimed: true,
         }
 
         onAuthSuccess(activeUser)
@@ -82,16 +84,16 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }: AuthModalP
               .select()
               .single()
 
-            onAuthSuccess(newUser || { id: 'demo-user', email, tron_address: null, chip_balance: 5000 })
+            onAuthSuccess(newUser || { id: 'demo-user', email, phone: null, username: email.split('@')[0], chip_balance: 50, bonus_claimed: true })
           }
         } else if (authData.user) {
           const { data: existingUser } = await supabase
-            .from('users')
+            .from('profiles')
             .select('*')
             .eq('id', authData.user.id)
             .single()
 
-          onAuthSuccess(existingUser || { id: authData.user.id, email: authData.user.email || email, tron_address: null, chip_balance: 5000 })
+          onAuthSuccess(existingUser || { id: authData.user.id, email: authData.user.email || email, phone: null, username: email.split('@')[0], chip_balance: 50, bonus_claimed: true })
         }
       }
       onClose()

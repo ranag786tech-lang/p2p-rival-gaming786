@@ -5,18 +5,31 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publish
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-export type UserProfile = {
+export type Profile = {
   id: string
-  email: string
-  tron_address: string | null
+  email: string | null
+  phone: string | null
+  username: string | null
   chip_balance: number
+  bonus_claimed: boolean
+  created_at?: string
+}
+
+export type UserWallet = {
+  id: string
+  user_id: string
+  type: 'bank' | 'easypaisa' | 'jazzcash'
+  account_title: string
+  account_number: string
+  iban?: string | null
+  is_verified: boolean
   created_at?: string
 }
 
 export type Transaction = {
   id?: string
   user_id: string
-  type: 'deposit' | 'withdraw' | 'win' | 'loss'
+  type: 'deposit' | 'withdraw' | 'bonus' | 'win' | 'loss'
   amount_pkr: number
   payment_method?: string
   payment_details?: string
