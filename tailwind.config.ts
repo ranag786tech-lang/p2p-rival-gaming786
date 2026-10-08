@@ -16,6 +16,15 @@ const config: Config = {
           hover: "#00e67a",
         },
       },
+      keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(-100%)' },
+        },
+      },
+      animation: {
+        marquee: 'marquee 18s linear infinite',
+      },
     },
   },
   plugins: [],

@@ -65,7 +65,7 @@ export default function WithdrawModal({
 
       // 2. Update user balance
       const newBal = Math.max(0, currentBalance - parsedAmount)
-      await supabase.from('users').update({ chip_balance: newBal }).eq('id', userId)
+      await supabase.from('profiles').update({ chip_balance: newBal }).eq('id', userId)
 
       setSubmitted(true)
       onWithdrawSuccess(parsedAmount)
